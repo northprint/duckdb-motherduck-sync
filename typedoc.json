@@ -1,0 +1,28 @@
+{
+  "entryPoints": ["./src/index.ts"],
+  "out": "./docs",
+  "name": "DuckDB-MotherDuck Sync Middleware",
+  "includeVersion": true,
+  "readme": "./README.md",
+  "navigationLinks": {
+    "GitHub": "https://github.com/northprint/duckdb-motherduck-sync"
+  },
+  "plugin": ["typedoc-plugin-markdown"],
+  "theme": "default",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Core",
+    "Adapters",
+    "Sync",
+    "Utils",
+    "Types",
+    "Errors"
+  ],
+  "sidebarLinks": {
+    "Documentation": "https://github.com/northprint/duckdb-motherduck-sync/wiki",
+    "Issues": "https://github.com/northprint/duckdb-motherduck-sync/issues"
+  }
+}

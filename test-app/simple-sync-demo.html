@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DuckDB Sync - Simple Demo</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    
+    .card {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    h1, h2 {
+      color: #333;
+    }
+    
+    input, button {
+      padding: 10px;
+      margin: 5px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background: #0056b3;
+    }
+    
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    
+    th, td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    
+    th {
+      background: #f5f5f5;
+    }
+    
+    .status {
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    
+    .status.info { background: #e3f2fd; color: #1565c0; }
+    .status.success { background: #e8f5e9; color: #388e3c; }
+    .status.error { background: #ffebee; color: #c62828; }
+  </style>
+</head>
+<body>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h1>🦆 DuckDB Sync Demo</h1>
+    <a href="index.html" style="text-decoration: none; color: #007bff;">← Back to Home</a>
+  </div>
+  
+  <div id="status" class="status info">
+    Initializing...
+  </div>
+
+  <div class="card">
+    <h2>Setup</h2>
+    <input type="password" id="token" placeholder="MotherDuck Token">
+    <button id="saveToken">Save Token</button>
+    <span id="tokenStatus"></span>
+  </div>
+
+  <div class="card">
+    <h2>Add User</h2>
+    <input type="text" id="name" placeholder="Name">
+    <input type="email" id="email" placeholder="Email">
+    <button id="addUser">Add User</button>
+  </div>
+
+  <div class="card">
+    <h2>Users</h2>
+    <button id="refresh">Refresh</button>
+    <button id="sync">Sync Now</button>
+    <div id="users">Loading...</div>
+  </div>
+
+  <script type="module">
+    import { DuckDBSync } from '../src/duckdb-sync.js';
+    
+    let sync = null;
+    
+    const elements = {
+      status: document.getElementById('status'),
+      token: document.getElementById('token'),
+      saveToken: document.getElementById('saveToken'),
+      tokenStatus: document.getElementById('tokenStatus'),
+      name: document.getElementById('name'),
+      email: document.getElementById('email'),
+      addUser: document.getElementById('addUser'),
+      users: document.getElementById('users'),
+      refresh: document.getElementById('refresh'),
+      sync: document.getElementById('sync'),
+    };
+    
+    // Update status
+    function updateStatus(message, type = 'info') {
+      elements.status.textContent = message;
+      elements.status.className = `status ${type}`;
+    }
+    
+    // Load users
+    async function loadUsers() {
+      try {
+        const users = await sync.query('SELECT * FROM users ORDER BY created_at DESC');
+        
+        if (users.length === 0) {
+          elements.users.innerHTML = '<p>No users yet</p>';
+          return;
+        }
+        
+        let html = '<table>';
+        html += '<tr><th>Name</th><th>Email</th><th>Created</th></tr>';
+        
+        for (const user of users) {
+          const created = new Date(user.created_at).toLocaleString();
+          html += `<tr>
+            <td>${user.name}</td>
+            <td>${user.email}</td>
+            <td>${created}</td>
+          </tr>`;
+        }
+        
+        html += '</table>';
+        elements.users.innerHTML = html;
+        
+      } catch (error) {
+        updateStatus(`Error loading users: ${error.message}`, 'error');
+      }
+    }
+    
+    // Initialize
+    async function init() {
+      try {
+        // Get saved token
+        const token = localStorage.getItem('motherduckToken');
+        if (token) {
+          elements.tokenStatus.textContent = '✓ Token saved';
+        }
+        
+        // Initialize sync
+        sync = new DuckDBSync({
+          motherduckToken: token,
+          autoSync: true,
+          syncInterval: 30000, // 30 seconds
+          syncWorkerPath: '/duckdb-sync-worker.js'
+        });
+        
+        // Setup event listeners
+        sync.on('sync-start', () => {
+          updateStatus('Syncing...', 'info');
+        });
+        
+        sync.on('sync-complete', (result) => {
+          updateStatus(`Sync complete: ${result.pushed} pushed, ${result.pulled} pulled`, 'success');
+          loadUsers();
+        });
+        
+        sync.on('sync-error', (error) => {
+          updateStatus(`Sync error: ${error.message}`, 'error');
+        });
+        
+        await sync.initialize();
+        
+        // Create users table
+        const conn = sync.getConnection();
+        await conn.query(`
+          CREATE TABLE IF NOT EXISTS users (
+            id VARCHAR PRIMARY KEY,
+            name VARCHAR NOT NULL,
+            email VARCHAR NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        
+        // Track table for sync
+        await sync.trackTable('users');
+        
+        updateStatus('Ready', 'success');
+        await loadUsers();
+        
+      } catch (error) {
+        updateStatus(`Error: ${error.message}`, 'error');
+        console.error(error);
+      }
+    }
+    
+    // Save token
+    elements.saveToken.addEventListener('click', async () => {
+      const token = elements.token.value.trim();
+      if (!token) {
+        alert('Please enter a token');
+        return;
+      }
+      
+      localStorage.setItem('motherduckToken', token);
+      elements.tokenStatus.textContent = '✓ Token saved';
+      elements.token.value = '';
+      
+      // Reinitialize with new token
+      if (sync) {
+        await sync.destroy();
+      }
+      await init();
+    });
+    
+    // Add user
+    elements.addUser.addEventListener('click', async () => {
+      const name = elements.name.value.trim();
+      const email = elements.email.value.trim();
+      
+      if (!name || !email) {
+        alert('Please enter name and email');
+        return;
+      }
+      
+      try {
+        const id = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        await sync.query(`
+          INSERT INTO users (id, name, email) 
+          VALUES ('${id}', '${name.replace(/'/g, "''")}', '${email.replace(/'/g, "''")}')
+        `);
+        
+        elements.name.value = '';
+        elements.email.value = '';
+        
+        await loadUsers();
+        updateStatus('User added', 'success');
+        
+      } catch (error) {
+        updateStatus(`Error: ${error.message}`, 'error');
+      }
+    });
+    
+    // Refresh
+    elements.refresh.addEventListener('click', loadUsers);
+    
+    // Manual sync
+    elements.sync.addEventListener('click', async () => {
+      try {
+        await sync.sync();
+      } catch (error) {
+        updateStatus(`Sync error: ${error.message}`, 'error');
+      }
+    });
+    
+    // Initialize
+    init();
+  </script>
+</body>
+</html>

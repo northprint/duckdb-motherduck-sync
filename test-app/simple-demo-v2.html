@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DuckDB Sync - Simple Demo V2</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "@duckdb/duckdb-wasm": "/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser.mjs",
+        "apache-arrow": "/node_modules/apache-arrow/Arrow.mjs",
+        "apache-arrow/io/stream": "/node_modules/apache-arrow/io/stream.mjs",
+        "apache-arrow/ipc/serialization": "/node_modules/apache-arrow/ipc/serialization.mjs",
+        "apache-arrow/util/buffer": "/node_modules/apache-arrow/util/buffer.mjs",
+        "flatbuffers": "/node_modules/flatbuffers/mjs/flatbuffers.js",
+        "tslib": "/node_modules/tslib/tslib.es6.mjs"
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+      background: #f5f5f7;
+    }
+    
+    .card {
+      background: white;
+      border: 1px solid #e5e5e7;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    
+    h1 {
+      color: #1d1d1f;
+      margin-bottom: 8px;
+    }
+    
+    h2 {
+      color: #1d1d1f;
+      font-size: 20px;
+      margin-top: 0;
+    }
+    
+    .nav {
+      margin-bottom: 30px;
+    }
+    
+    .nav a {
+      text-decoration: none;
+      color: #007AFF;
+    }
+    
+    input, button {
+      padding: 12px;
+      margin: 4px;
+      border: 1px solid #d2d2d7;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    
+    input {
+      width: calc(100% - 32px);
+      margin-bottom: 12px;
+    }
+    
+    button {
+      background: #007AFF;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      min-width: 120px;
+    }
+    
+    button:hover {
+      background: #0051D5;
+    }
+    
+    button:disabled {
+      background: #d2d2d7;
+      cursor: not-allowed;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+    
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e5e7;
+    }
+    
+    th {
+      background: #f5f5f7;
+      font-weight: 600;
+      color: #86868b;
+      font-size: 14px;
+    }
+    
+    .status {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    
+    .status.info { background: #e3f2fd; color: #1565c0; }
+    .status.success { background: #e8f5e9; color: #388e3c; }
+    .status.error { background: #ffebee; color: #c62828; }
+    
+    .empty {
+      text-align: center;
+      color: #86868b;
+      padding: 40px;
+    }
+    
+    .sync-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 16px;
+      background: #f5f5f7;
+      border-radius: 8px;
+    }
+    
+    .sync-info span {
+      font-size: 14px;
+      color: #86868b;
+    }
+    
+    .log {
+      background: #f5f5f7;
+      border-radius: 8px;
+      padding: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: 'SF Mono', monospace;
+      font-size: 12px;
+    }
+    
+    .log-entry {
+      margin-bottom: 4px;
+    }
+    
+    .log-entry.error { color: #c62828; }
+    .log-entry.success { color: #388e3c; }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <a href="index.html">← Back to Home</a>
+  </div>
+
+  <h1>🦆 DuckDB-MotherDuck Sync Demo</h1>
+  
+  <div id="status" class="status info">
+    Initializing local database...
+  </div>
+
+  <div class="sync-info">
+    <span>Network: <strong id="networkStatus">Online</strong></span>
+    <span>Pending: <strong id="pendingCount">0</strong> changes</span>
+    <span>Auto-sync: <input type="checkbox" id="autoSync" checked></span>
+  </div>
+
+  <div class="card">
+    <h2>⚙️ Configuration</h2>
+    <input type="password" id="token" placeholder="Enter your MotherDuck token">
+    <button id="saveToken">Save Token</button>
+    <span id="tokenStatus"></span>
+  </div>
+
+  <div class="card">
+    <h2>➕ Add User</h2>
+    <input type="text" id="name" placeholder="Name">
+    <input type="email" id="email" placeholder="Email">
+    <button id="addUser">Add User</button>
+  </div>
+
+  <div class="card">
+    <h2>👥 Users</h2>
+    <div style="margin-bottom: 16px;">
+      <button id="refresh">Refresh</button>
+      <button id="syncNow">Sync Now</button>
+      <button id="clearLocal">Clear Local</button>
+    </div>
+    <div id="users">
+      <p class="empty">Loading...</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📝 Activity Log</h2>
+    <div id="log" class="log"></div>
+  </div>
+
+  <script type="module">
+    import * as duckdb from '@duckdb/duckdb-wasm';
+    
+    // Global state
+    let db = null;
+    let conn = null;
+    let syncWorker = null;
+    let autoSyncEnabled = true;
+    let autoSyncInterval = null;
+    
+    // UI Elements
+    const elements = {
+      status: document.getElementById('status'),
+      networkStatus: document.getElementById('networkStatus'),
+      pendingCount: document.getElementById('pendingCount'),
+      autoSync: document.getElementById('autoSync'),
+      token: document.getElementById('token'),
+      saveToken: document.getElementById('saveToken'),
+      tokenStatus: document.getElementById('tokenStatus'),
+      name: document.getElementById('name'),
+      email: document.getElementById('email'),
+      addUser: document.getElementById('addUser'),
+      users: document.getElementById('users'),
+      refresh: document.getElementById('refresh'),
+      syncNow: document.getElementById('syncNow'),
+      clearLocal: document.getElementById('clearLocal'),
+      log: document.getElementById('log'),
+    };
+    
+    // Logging
+    function log(message, type = 'info') {
+      const time = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${time}] ${message}`;
+      elements.log.appendChild(entry);
+      elements.log.scrollTop = elements.log.scrollHeight;
+    }
+    
+    // Update status
+    function updateStatus(message, type = 'info') {
+      elements.status.textContent = message;
+      elements.status.className = `status ${type}`;
+    }
+    
+    // Initialize DuckDB
+    async function initDB() {
+      try {
+        log('Initializing DuckDB...');
+        
+        // Check if files exist
+        console.log('Attempting to load DuckDB WASM...');
+        
+        const baseUrl = window.location.origin;
+        const DUCKDB_CONFIG = await duckdb.selectBundle({
+          mvp: {
+            mainModule: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm`,
+            mainWorker: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js`,
+          },
+          eh: {
+            mainModule: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm`,
+            mainWorker: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js`,
+          },
+        });
+        
+        console.log('DUCKDB_CONFIG:', DUCKDB_CONFIG);
+        
+        const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING);
+        const worker = new Worker(DUCKDB_CONFIG.mainWorker);
+        
+        db = new duckdb.AsyncDuckDB(logger, worker);
+        await db.instantiate(DUCKDB_CONFIG.mainModule);
+        
+        conn = await db.connect();
+        
+        // Create tables
+        await conn.query(`
+          CREATE TABLE IF NOT EXISTS users (
+            id VARCHAR PRIMARY KEY,
+            name VARCHAR NOT NULL,
+            email VARCHAR NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            synced BOOLEAN DEFAULT false
+          )
+        `);
+        
+        await conn.query(`
+          CREATE TABLE IF NOT EXISTS _sync_queue (
+            id VARCHAR PRIMARY KEY,
+            table_name VARCHAR,
+            operation VARCHAR,
+            data JSON,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        
+        log('Database initialized', 'success');
+        updateStatus('Ready', 'success');
+        
+        await loadUsers();
+        await updatePendingCount();
+        
+        // Initialize sync if token exists
+        const token = localStorage.getItem('motherduckToken');
+        if (token) {
+          elements.tokenStatus.textContent = '✓ Token saved';
+          initializeSync(token);
+        }
+        
+      } catch (error) {
+        log(`Database error: ${error.message}`, 'error');
+        updateStatus('Database initialization failed', 'error');
+      }
+    }
+    
+    // Initialize sync worker
+    async function initializeSync(token) {
+      try {
+        syncWorker = new Worker('/public/duckdb-sync-worker.js');
+        
+        syncWorker.onmessage = handleWorkerMessage;
+        
+        syncWorker.postMessage({
+          type: 'INITIALIZE',
+          token: token
+        });
+        
+        log('Sync worker initialized');
+        
+        if (autoSyncEnabled) {
+          startAutoSync();
+        }
+        
+      } catch (error) {
+        log(`Sync initialization error: ${error.message}`, 'error');
+      }
+    }
+    
+    // Handle worker messages
+    function handleWorkerMessage(event) {
+      const { type, result, error } = event.data;
+      
+      switch (type) {
+        case 'INITIALIZED':
+          log('Connected to MotherDuck', 'success');
+          break;
+          
+        case 'SUCCESS':
+          log(`Sync complete: ${result.pushed} pushed`, 'success');
+          markAsSynced();
+          break;
+          
+        case 'ERROR':
+          log(`Sync error: ${error}`, 'error');
+          break;
+      }
+    }
+    
+    // Load users
+    async function loadUsers() {
+      try {
+        const result = await conn.query('SELECT * FROM users ORDER BY created_at DESC');
+        const users = result.toArray();
+        
+        if (users.length === 0) {
+          elements.users.innerHTML = '<p class="empty">No users yet. Add one above!</p>';
+          return;
+        }
+        
+        let html = '<table>';
+        html += '<tr><th>Name</th><th>Email</th><th>Status</th><th>Created</th></tr>';
+        
+        for (const user of users) {
+          const created = new Date(user.created_at).toLocaleString();
+          const status = user.synced ? '✓ Synced' : '⏳ Pending';
+          html += `<tr>
+            <td>${user.name}</td>
+            <td>${user.email}</td>
+            <td>${status}</td>
+            <td>${created}</td>
+          </tr>`;
+        }
+        
+        html += '</table>';
+        elements.users.innerHTML = html;
+        
+      } catch (error) {
+        log(`Load error: ${error.message}`, 'error');
+      }
+    }
+    
+    // Update pending count
+    async function updatePendingCount() {
+      try {
+        const result = await conn.query('SELECT COUNT(*) as count FROM users WHERE NOT synced');
+        const count = result.toArray()[0].count;
+        elements.pendingCount.textContent = count;
+      } catch (error) {
+        elements.pendingCount.textContent = '?';
+      }
+    }
+    
+    // Add user
+    async function addUser() {
+      const name = elements.name.value.trim();
+      const email = elements.email.value.trim();
+      
+      if (!name || !email) {
+        alert('Please enter name and email');
+        return;
+      }
+      
+      try {
+        const id = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        await conn.query(`
+          INSERT INTO users (id, name, email) 
+          VALUES ('${id}', '${name.replace(/'/g, "''")}', '${email.replace(/'/g, "''")}')
+        `);
+        
+        // Add to sync queue
+        await conn.query(`
+          INSERT INTO _sync_queue (id, table_name, operation, data)
+          VALUES ('${id}', 'users', 'INSERT', '${JSON.stringify({ id, name, email })}')
+        `);
+        
+        log(`Added user: ${name}`, 'success');
+        elements.name.value = '';
+        elements.email.value = '';
+        
+        await loadUsers();
+        await updatePendingCount();
+        
+      } catch (error) {
+        log(`Add error: ${error.message}`, 'error');
+      }
+    }
+    
+    // Sync now
+    async function syncNow() {
+      if (!syncWorker) {
+        log('Sync not configured. Please save MotherDuck token first.', 'error');
+        return;
+      }
+      
+      try {
+        updateStatus('Syncing...', 'info');
+        
+        // Get pending users
+        const result = await conn.query('SELECT * FROM users WHERE NOT synced');
+        const users = result.toArray();
+        
+        if (users.length === 0) {
+          log('No pending changes');
+          updateStatus('Ready', 'success');
+          return;
+        }
+        
+        // Send to worker
+        syncWorker.postMessage({
+          type: 'SYNC',
+          changes: users.map(user => ({
+            table_name: 'users',
+            operation: 'INSERT',
+            data: user
+          })),
+          schemas: {
+            users: [
+              { column_name: 'id', data_type: 'VARCHAR' },
+              { column_name: 'name', data_type: 'VARCHAR' },
+              { column_name: 'email', data_type: 'VARCHAR' },
+              { column_name: 'created_at', data_type: 'TIMESTAMP' },
+            ]
+          }
+        });
+        
+      } catch (error) {
+        log(`Sync error: ${error.message}`, 'error');
+        updateStatus('Ready', 'success');
+      }
+    }
+    
+    // Mark as synced
+    async function markAsSynced() {
+      try {
+        await conn.query('UPDATE users SET synced = true WHERE NOT synced');
+        await conn.query('DELETE FROM _sync_queue');
+        await loadUsers();
+        await updatePendingCount();
+        updateStatus('Ready', 'success');
+      } catch (error) {
+        log(`Update error: ${error.message}`, 'error');
+      }
+    }
+    
+    // Clear local data
+    async function clearLocal() {
+      if (!confirm('Delete all local data?')) return;
+      
+      try {
+        await conn.query('DELETE FROM users');
+        await conn.query('DELETE FROM _sync_queue');
+        log('Local data cleared', 'success');
+        await loadUsers();
+        await updatePendingCount();
+      } catch (error) {
+        log(`Clear error: ${error.message}`, 'error');
+      }
+    }
+    
+    // Start auto sync
+    function startAutoSync() {
+      stopAutoSync();
+      autoSyncInterval = setInterval(() => {
+        if (navigator.onLine) {
+          syncNow();
+        }
+      }, 30000); // 30 seconds
+    }
+    
+    // Stop auto sync
+    function stopAutoSync() {
+      if (autoSyncInterval) {
+        clearInterval(autoSyncInterval);
+        autoSyncInterval = null;
+      }
+    }
+    
+    // Save token
+    function saveToken() {
+      const token = elements.token.value.trim();
+      if (!token) {
+        alert('Please enter a token');
+        return;
+      }
+      
+      localStorage.setItem('motherduckToken', token);
+      elements.tokenStatus.textContent = '✓ Saved';
+      elements.token.value = '';
+      log('Token saved', 'success');
+      
+      if (syncWorker) {
+        syncWorker.terminate();
+      }
+      initializeSync(token);
+    }
+    
+    // Event listeners
+    elements.saveToken.addEventListener('click', saveToken);
+    elements.addUser.addEventListener('click', addUser);
+    elements.refresh.addEventListener('click', loadUsers);
+    elements.syncNow.addEventListener('click', syncNow);
+    elements.clearLocal.addEventListener('click', clearLocal);
+    elements.autoSync.addEventListener('change', (e) => {
+      autoSyncEnabled = e.target.checked;
+      if (autoSyncEnabled && syncWorker) {
+        startAutoSync();
+      } else {
+        stopAutoSync();
+      }
+    });
+    
+    // Network status
+    window.addEventListener('online', () => {
+      elements.networkStatus.textContent = 'Online';
+      log('Network: Online', 'success');
+    });
+    
+    window.addEventListener('offline', () => {
+      elements.networkStatus.textContent = 'Offline';
+      log('Network: Offline', 'error');
+    });
+    
+    // Initialize
+    elements.networkStatus.textContent = navigator.onLine ? 'Online' : 'Offline';
+    initDB();
+  </script>
+</body>
+</html>

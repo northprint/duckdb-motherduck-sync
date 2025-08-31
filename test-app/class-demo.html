@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DuckDB Sync - Class API Demo (Without Sync)</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "@duckdb/duckdb-wasm": "/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser.mjs",
+        "apache-arrow": "/node_modules/apache-arrow/Arrow.mjs",
+        "apache-arrow/io/stream": "/node_modules/apache-arrow/io/stream.mjs",
+        "apache-arrow/ipc/serialization": "/node_modules/apache-arrow/ipc/serialization.mjs",
+        "apache-arrow/util/buffer": "/node_modules/apache-arrow/util/buffer.mjs",
+        "flatbuffers": "/node_modules/flatbuffers/mjs/flatbuffers.js",
+        "tslib": "/node_modules/tslib/tslib.es6.mjs"
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+      background: #f5f5f7;
+    }
+    
+    .card {
+      background: white;
+      border: 1px solid #e5e5e7;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    
+    h1 {
+      color: #1d1d1f;
+      margin-bottom: 8px;
+    }
+    
+    h2 {
+      color: #1d1d1f;
+      font-size: 20px;
+      margin-top: 0;
+    }
+    
+    .nav {
+      margin-bottom: 30px;
+    }
+    
+    .nav a {
+      text-decoration: none;
+      color: #007AFF;
+    }
+    
+    input, button {
+      padding: 12px;
+      margin: 4px;
+      border: 1px solid #d2d2d7;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    
+    input {
+      width: calc(100% - 32px);
+      margin-bottom: 12px;
+    }
+    
+    button {
+      background: #007AFF;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      min-width: 120px;
+    }
+    
+    button:hover {
+      background: #0051D5;
+    }
+    
+    button:disabled {
+      background: #d2d2d7;
+      cursor: not-allowed;
+    }
+    
+    .status {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    
+    .status.info { background: #e3f2fd; color: #1565c0; }
+    .status.success { background: #e8f5e9; color: #388e3c; }
+    .status.error { background: #ffebee; color: #c62828; }
+    
+    .log {
+      background: #f5f5f7;
+      border-radius: 8px;
+      padding: 16px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'SF Mono', monospace;
+      font-size: 12px;
+    }
+    
+    .log-entry {
+      margin-bottom: 4px;
+    }
+    
+    .log-entry.error { color: #c62828; }
+    .log-entry.success { color: #388e3c; }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+    
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e5e7;
+    }
+    
+    th {
+      background: #f5f5f7;
+      font-weight: 600;
+      color: #86868b;
+      font-size: 14px;
+    }
+    
+    .empty {
+      text-align: center;
+      color: #86868b;
+      padding: 40px;
+    }
+    
+    .warning {
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      color: #856404;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <a href="index.html">← Back to Home</a>
+  </div>
+
+  <h1>🦆 DuckDB Local-Only Demo</h1>
+  <p>This demo shows DuckDB WASM working locally (without MotherDuck sync)</p>
+  
+  <div class="warning">
+    <strong>Note:</strong> This is a simplified demo that only uses local DuckDB storage. 
+    MotherDuck sync functionality is disabled due to module loading issues in the browser environment.
+  </div>
+  
+  <div id="status" class="status info">
+    Initializing local database...
+  </div>
+
+  <div class="card">
+    <h2>➕ Add Product</h2>
+    <input type="text" id="productName" placeholder="Product Name">
+    <input type="number" id="productPrice" placeholder="Price" step="0.01">
+    <button id="addBtn" disabled>Add Product</button>
+  </div>
+
+  <div class="card">
+    <h2>📦 Products</h2>
+    <div style="margin-bottom: 16px;">
+      <button id="refreshBtn" disabled>Refresh</button>
+      <button id="clearBtn" disabled>Clear All</button>
+    </div>
+    <div id="products">
+      <p class="empty">Initialize to see products</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📝 Activity Log</h2>
+    <div id="log" class="log"></div>
+  </div>
+
+  <script type="module">
+    import * as duckdb from '@duckdb/duckdb-wasm';
+    
+    // Global state
+    let db = null;
+    let conn = null;
+    
+    // UI Elements
+    const elements = {
+      status: document.getElementById('status'),
+      productName: document.getElementById('productName'),
+      productPrice: document.getElementById('productPrice'),
+      addBtn: document.getElementById('addBtn'),
+      products: document.getElementById('products'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      clearBtn: document.getElementById('clearBtn'),
+      log: document.getElementById('log'),
+    };
+    
+    // Logging
+    function log(message, type = 'info') {
+      const time = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${time}] ${message}`;
+      elements.log.appendChild(entry);
+      elements.log.scrollTop = elements.log.scrollHeight;
+    }
+    
+    // Update status
+    function updateStatus(message, type = 'info') {
+      elements.status.textContent = message;
+      elements.status.className = `status ${type}`;
+    }
+    
+    // Initialize DuckDB
+    async function initializeDB() {
+      try {
+        updateStatus('Initializing DuckDB...', 'info');
+        log('Starting DuckDB initialization...');
+        
+        const baseUrl = window.location.origin;
+        const DUCKDB_CONFIG = await duckdb.selectBundle({
+          mvp: {
+            mainModule: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm`,
+            mainWorker: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js`,
+          },
+          eh: {
+            mainModule: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm`,
+            mainWorker: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js`,
+          },
+        });
+        
+        log('Creating DuckDB instance...');
+        const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING);
+        const worker = new Worker(DUCKDB_CONFIG.mainWorker);
+        
+        db = new duckdb.AsyncDuckDB(logger, worker);
+        await db.instantiate(DUCKDB_CONFIG.mainModule, DUCKDB_CONFIG.pthreadWorker);
+        
+        conn = await db.connect();
+        
+        // Create products table
+        await conn.query(`
+          CREATE TABLE IF NOT EXISTS products (
+            id VARCHAR PRIMARY KEY,
+            name VARCHAR NOT NULL,
+            price DECIMAL(10, 2) NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        
+        log('Database ready', 'success');
+        updateStatus('Ready (Local-only mode)', 'success');
+        
+        // Enable buttons
+        elements.addBtn.disabled = false;
+        elements.refreshBtn.disabled = false;
+        elements.clearBtn.disabled = false;
+        
+        // Load products
+        await loadProducts();
+        
+      } catch (error) {
+        log(`Initialization error: ${error.message}`, 'error');
+        updateStatus('Initialization failed', 'error');
+        console.error('Full error:', error);
+      }
+    }
+    
+    // Load products
+    async function loadProducts() {
+      try {
+        const result = await conn.query('SELECT * FROM products ORDER BY created_at DESC');
+        const products = result.toArray();
+        
+        if (products.length === 0) {
+          elements.products.innerHTML = '<p class="empty">No products yet. Add one above!</p>';
+          return;
+        }
+        
+        let html = '<table>';
+        html += '<tr><th>Name</th><th>Price</th><th>Created</th></tr>';
+        
+        for (const product of products) {
+          const created = new Date(product.created_at).toLocaleString();
+          const price = parseFloat(product.price).toFixed(2);
+          html += `<tr>
+            <td>${product.name}</td>
+            <td>$${price}</td>
+            <td>${created}</td>
+          </tr>`;
+        }
+        
+        html += '</table>';
+        elements.products.innerHTML = html;
+        
+        log(`Loaded ${products.length} products`);
+        
+      } catch (error) {
+        log(`Load error: ${error.message}`, 'error');
+      }
+    }
+    
+    // Add product
+    async function addProduct() {
+      const name = elements.productName.value.trim();
+      const price = parseFloat(elements.productPrice.value);
+      
+      if (!name || isNaN(price) || price <= 0) {
+        alert('Please enter valid product name and price');
+        return;
+      }
+      
+      try {
+        const id = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        
+        await conn.query(`
+          INSERT INTO products (id, name, price) 
+          VALUES ('${id}', '${name.replace(/'/g, "''")}', ${price})
+        `);
+        
+        log(`Added product: ${name} ($${price.toFixed(2)})`, 'success');
+        elements.productName.value = '';
+        elements.productPrice.value = '';
+        
+        await loadProducts();
+        
+      } catch (error) {
+        log(`Add error: ${error.message}`, 'error');
+      }
+    }
+    
+    // Clear all products
+    async function clearAll() {
+      if (!confirm('Delete all products?')) return;
+      
+      try {
+        await conn.query('DELETE FROM products');
+        log('All products cleared', 'success');
+        await loadProducts();
+      } catch (error) {
+        log(`Clear error: ${error.message}`, 'error');
+      }
+    }
+    
+    // Event listeners
+    elements.addBtn.addEventListener('click', addProduct);
+    elements.refreshBtn.addEventListener('click', loadProducts);
+    elements.clearBtn.addEventListener('click', clearAll);
+    
+    // Handle enter key
+    elements.productPrice.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !elements.addBtn.disabled) {
+        addProduct();
+      }
+    });
+    
+    // Initialize on load
+    initializeDB();
+  </script>
+</body>
+</html>

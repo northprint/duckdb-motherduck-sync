@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DuckDB WASM Test</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "@duckdb/duckdb-wasm": "/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser.mjs",
+        "apache-arrow": "/node_modules/apache-arrow/Arrow.mjs",
+        "apache-arrow/io/stream": "/node_modules/apache-arrow/io/stream.mjs",
+        "apache-arrow/ipc/serialization": "/node_modules/apache-arrow/ipc/serialization.mjs",
+        "apache-arrow/util/buffer": "/node_modules/apache-arrow/util/buffer.mjs",
+        "flatbuffers": "/node_modules/flatbuffers/mjs/flatbuffers.js",
+        "tslib": "/node_modules/tslib/tslib.es6.mjs"
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>DuckDB WASM Test</h1>
+  <div id="status">Loading...</div>
+  
+  <script type="module">
+    import * as duckdb from '@duckdb/duckdb-wasm';
+    
+    async function test() {
+      try {
+        console.log('DuckDB module loaded');
+        
+        // Use local bundles
+        const baseUrl = window.location.origin;
+        const bundle = await duckdb.selectBundle({
+          mvp: {
+            mainModule: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm`,
+            mainWorker: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js`,
+          },
+          eh: {
+            mainModule: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm`,
+            mainWorker: `${baseUrl}/node_modules/@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js`,
+          },
+        });
+        
+        console.log('Selected bundle:', bundle);
+        
+        const worker = await duckdb.createWorker(bundle.mainWorker);
+        const logger = new duckdb.ConsoleLogger();
+        const db = new duckdb.AsyncDuckDB(logger, worker);
+        
+        await db.instantiate(bundle.mainModule);
+        console.log('Database instantiated');
+        
+        const conn = await db.connect();
+        const result = await conn.query('SELECT 42 as answer');
+        console.log('Query result:', result.toArray());
+        
+        document.getElementById('status').textContent = 'Success! DuckDB WASM is working.';
+        
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('status').textContent = 'Error: ' + error.message;
+      }
+    }
+    
+    test();
+  </script>
+</body>
+</html>

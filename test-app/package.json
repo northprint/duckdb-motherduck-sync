@@ -1,0 +1,19 @@
+{
+  "name": "duckdb-sync-test-app",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:static": "node static-server.js",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "^1.29.1-dev132.0",
+    "@motherduck/wasm-client": "^0.6.6",
+    "express": "^4.18.2",
+    "fp-ts": "^2.16.11"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
