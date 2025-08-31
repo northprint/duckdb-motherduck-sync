@@ -4,7 +4,6 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { pipe } from 'fp-ts/function';
-import * as TE from 'fp-ts/TaskEither';
 import * as O from 'fp-ts/Option';
 import { createMemoryAdapter, createIndexedDBAdapter } from './storage';
 import type { StorageOperations } from './storage';

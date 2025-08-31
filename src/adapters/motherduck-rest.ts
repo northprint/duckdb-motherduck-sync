@@ -4,7 +4,6 @@
  * The actual MotherDuck API endpoints need to be verified.
  */
 
-import { pipe } from 'fp-ts/function';
 import * as TE from 'fp-ts/TaskEither';
 import type { TaskEither } from 'fp-ts/TaskEither';
 import { networkError, authError } from '../types/errors';
@@ -30,17 +29,20 @@ interface MotherDuckConfig {
   timeout?: number;
 }
 
-const defaultConfig: Required<MotherDuckConfig> = {
-  apiUrl: 'https://api.motherduck.com',
-  timeout: 30000,
-};
+// Removed unused default config
+// const defaultConfig: Required<MotherDuckConfig> = {
+//   apiUrl: 'https://api.motherduck.com',
+//   timeout: 30000,
+// };
 
 export const createMotherDuckRESTClient = (
-  config: MotherDuckConfig = {},
+  _config: MotherDuckConfig = {},
 ): MotherDuckRESTClient => {
-  const fullConfig = { ...defaultConfig, ...config };
-  let authToken: string | null = null;
+  // const fullConfig = { ...defaultConfig, ...config };
+  // let authToken: string | null = null;
 
+  // Removed unused function fetchWithAuth
+  /*
   const fetchWithAuth = async (
     endpoint: string,
     options: RequestInit = {},
@@ -70,13 +72,14 @@ export const createMotherDuckRESTClient = (
       throw error;
     }
   };
+  */
 
   return {
     authenticate: (token: string) =>
       TE.tryCatch(
         async () => {
           // Store token for future requests
-          authToken = token;
+          // authToken = token;
           
           // TODO: Verify token with actual MotherDuck API
           // For now, just accept any token starting with 'eyJ' (JWT format)
@@ -87,7 +90,7 @@ export const createMotherDuckRESTClient = (
         (error) => authError(String(error), true),
       ),
 
-    executeSql: (sql: string) =>
+    executeSql: (_sql: string) =>
       TE.tryCatch(
         async () => {
           // TODO: Implement actual SQL execution via MotherDuck API

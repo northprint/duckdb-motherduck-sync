@@ -2,10 +2,7 @@
  * Conflict detection for sync operations
  */
 
-import { pipe } from 'fp-ts/function';
 import * as TE from 'fp-ts/TaskEither';
-import * as A from 'fp-ts/Array';
-import * as O from 'fp-ts/Option';
 import type { TaskEither } from 'fp-ts/TaskEither';
 import type {
   Change,
@@ -95,14 +92,12 @@ export const detectConflicts = (
       // Both modified the same record
       if (recordsConflict(localChange.data, remoteChange.data, options)) {
         conflicts.push({
-          id: `conflict_${localChange.id}_${remoteChange.id}`,
           table: localChange.table,
-          recordId: localChange.data['id'] as string,
-          localVersion: localChange.data,
-          remoteVersion: remoteChange.data,
+          key: { id: localChange.data['id'] || '' },
+          localValue: localChange.data,
+          remoteValue: remoteChange.data,
           localTimestamp: localChange.timestamp,
           remoteTimestamp: remoteChange.timestamp,
-          detectedAt: Date.now(),
         });
       }
     } else if (localChange.operation === 'UPDATE') {
@@ -116,14 +111,12 @@ export const detectConflicts = (
       
       if (remoteDelete) {
         conflicts.push({
-          id: `conflict_${localChange.id}_delete`,
           table: localChange.table,
-          recordId: localChange.data['id'] as string,
-          localVersion: localChange.data,
-          remoteVersion: {}, // Deleted
+          key: { id: localChange.data['id'] || '' },
+          localValue: localChange.data,
+          remoteValue: {}, // Deleted
           localTimestamp: localChange.timestamp,
           remoteTimestamp: remoteDelete.timestamp,
-          detectedAt: Date.now(),
         });
       }
     }
@@ -141,16 +134,14 @@ export const detectConflicts = (
             change.data['id'] === recordId
         );
         
-        if (localUpdate && !conflicts.some(c => c.recordId === recordId)) {
+        if (localUpdate && !conflicts.some(c => c.key['id'] === recordId)) {
           conflicts.push({
-            id: `conflict_delete_${localUpdate.id}`,
             table: remoteChange.table,
-            recordId,
-            localVersion: localUpdate.data,
-            remoteVersion: {}, // Deleted
+            key: { id: recordId },
+            localValue: localUpdate.data,
+            remoteValue: {}, // Deleted
             localTimestamp: localUpdate.timestamp,
             remoteTimestamp: remoteChange.timestamp,
-            detectedAt: Date.now(),
           });
         }
       }
@@ -169,16 +160,14 @@ export const detectConflicts = (
             change.data['id'] === recordId
         );
         
-        if (remoteUpdate && !conflicts.some(c => c.recordId === recordId)) {
+        if (remoteUpdate && !conflicts.some(c => c.key['id'] === recordId)) {
           conflicts.push({
-            id: `conflict_${localChange.id}_${remoteUpdate.id}`,
             table: localChange.table,
-            recordId,
-            localVersion: {}, // Deleted
-            remoteVersion: remoteUpdate.data,
+            key: { id: recordId },
+            localValue: {}, // Deleted
+            remoteValue: remoteUpdate.data,
             localTimestamp: localChange.timestamp,
             remoteTimestamp: remoteUpdate.timestamp,
-            detectedAt: Date.now(),
           });
         }
       }
@@ -201,7 +190,7 @@ export const createConflictDetector = (
       (error) => conflictError(
         'Conflict detection failed',
         [],
-        error instanceof Error ? error : new Error(String(error)),
+        error instanceof Error ? error : (new Error(String(error)) as any),
       ),
     ),
 });

@@ -120,6 +120,11 @@ export const initializeDuckDB = (config: SyncConfig): TE.TaskEither<SyncError, D
       });
       
       const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING);
+      
+      if (!DUCKDB_CONFIG.mainWorker) {
+        throw new Error('DuckDB mainWorker path is null');
+      }
+      
       const worker = new Worker(DUCKDB_CONFIG.mainWorker);
       
       const db = new duckdb.AsyncDuckDB(logger, worker);
@@ -295,7 +300,7 @@ export const getTableSchemas = (state: SyncState): TE.TaskEither<SyncError, Reco
             TE.map((schema) => [tableName, schema] as const)
           )
         ),
-        TE.map(R.fromEntries)
+        TE.map((entries) => R.fromEntries(entries as Array<[string, any[]]>))
       )
     )
   );
@@ -404,7 +409,7 @@ export const sync = (state: SyncState): TE.TaskEither<SyncError, { pushed: numbe
                 }))
               )
             ),
-            TE.chainFirst((result) => TE.fromIO(emit(state)('sync-complete')(result)()))
+            TE.chainFirst((result) => TE.fromIO(emit(state)('sync-complete')(result)))
           );
         }),
         TE.mapLeft((error) => {

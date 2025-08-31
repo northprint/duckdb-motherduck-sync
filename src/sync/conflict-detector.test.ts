@@ -81,9 +81,9 @@ describe('Conflict Detector', () => {
 
       expect(conflicts).toHaveLength(1);
       expect(conflicts[0]?.table).toBe('users');
-      expect(conflicts[0]?.recordId).toBe('1');
-      expect(conflicts[0]?.localVersion.name).toBe('Alice Local');
-      expect(conflicts[0]?.remoteVersion.name).toBe('Alice Remote');
+      expect(conflicts[0]?.key.id).toBe('1');
+      expect(conflicts[0]?.localValue.name).toBe('Alice Local');
+      expect(conflicts[0]?.remoteValue.name).toBe('Alice Remote');
     });
 
     it('should detect update-delete conflicts', () => {
@@ -107,8 +107,8 @@ describe('Conflict Detector', () => {
       const conflicts = detectConflicts(localChanges, remoteChanges);
 
       expect(conflicts).toHaveLength(1);
-      expect(conflicts[0]?.recordId).toBe('1');
-      expect(conflicts[0]?.remoteVersion).toEqual({});
+      expect(conflicts[0]?.key.id).toBe('1');
+      expect(conflicts[0]?.remoteValue).toEqual({});
     });
 
     it('should detect delete-update conflicts', () => {
@@ -132,8 +132,8 @@ describe('Conflict Detector', () => {
       const conflicts = detectConflicts(localChanges, remoteChanges);
 
       expect(conflicts).toHaveLength(1);
-      expect(conflicts[0]?.recordId).toBe('1');
-      expect(conflicts[0]?.localVersion).toEqual({});
+      expect(conflicts[0]?.key.id).toBe('1');
+      expect(conflicts[0]?.localValue).toEqual({});
     });
 
     it('should not detect conflicts for different records', () => {

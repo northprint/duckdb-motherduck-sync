@@ -37,7 +37,7 @@ export const compress = (
         return input;
       }
 
-      return pako.gzip(input, { level: options.level });
+      return pako.gzip(input, { level: options.level as pako.DeflateOptions['level'] });
     },
     (error) => unknownError('Compression failed', error),
   );
@@ -83,7 +83,7 @@ export const decompressJson = <T = unknown>(
           const text = new TextDecoder().decode(decompressed);
           return JSON.parse(text) as T;
         },
-        (error) => unknownError('JSON deserialization failed', error),
+        (error): SyncError => unknownError('JSON deserialization failed', error),
       ),
     ),
   );

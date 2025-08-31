@@ -3,15 +3,21 @@
   "version": "0.1.0",
   "description": "Sync middleware for DuckDB WASM and MotherDuck cloud storage",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
+  "main": "./src/index-simple.js",
+  "module": "./src/index-simple.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "import": "./src/index-simple.js",
       "require": "./dist/index.cjs"
     },
-    "./worker": "./public/duckdb-sync-worker.js"
+    "./worker": "./public/duckdb-sync-worker.js",
+    "./typescript": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
   },
   "files": [
     "dist",

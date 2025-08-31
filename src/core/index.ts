@@ -3,5 +3,6 @@
  */
 
 export * from './network-monitor';
-export * from './change-tracker';
-export * from './change-tracker-duckdb';
+export type { ChangeTracker } from './change-tracker';
+export { createChangeTracker } from './change-tracker';
+export { createDuckDBChangeTracker } from './change-tracker-duckdb';

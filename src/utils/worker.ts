@@ -2,7 +2,6 @@
  * Web Worker utilities for background processing
  */
 
-import { pipe } from 'fp-ts/function';
 import * as TE from 'fp-ts/TaskEither';
 import type { TaskEither } from 'fp-ts/TaskEither';
 import type { SyncError } from '../types/errors';
@@ -23,11 +22,11 @@ export interface WorkerResponse {
 
 // Worker pool for managing multiple workers
 export interface WorkerPool {
-  readonly execute: <T>(task: WorkerTask<T>) => TaskEither<SyncError, T>;
+  readonly execute: <T>(task: WorkerTask) => TaskEither<SyncError, T>;
   readonly terminate: () => void;
 }
 
-export interface WorkerTask<T> {
+export interface WorkerTask {
   readonly type: string;
   readonly payload: unknown;
   readonly timeout?: number;
@@ -70,9 +69,9 @@ export const createWorkerPool = (
         busyWorkers.delete(worker);
         
         if (response.type === 'success') {
-          task.resolve(response.payload);
+          task!.resolve(response.payload);
         } else {
-          task.reject(new Error(String(response.payload)));
+          task!.reject(new Error(String(response.payload)));
         }
         
         // Process next task in queue
@@ -104,7 +103,7 @@ export const createWorkerPool = (
   };
 
   return {
-    execute: <T>(task: WorkerTask<T>) =>
+    execute: <T>(task: WorkerTask) =>
       TE.tryCatch(
         () => new Promise<T>((resolve, reject) => {
           const id = `${Date.now()}-${Math.random()}`;
@@ -155,7 +154,7 @@ export const createWorkerPool = (
 
 // Create fallback worker pool for non-worker environments
 const createFallbackWorkerPool = (): WorkerPool => ({
-  execute: <T>(task: WorkerTask<T>) =>
+  execute: <T>(_task: WorkerTask): TaskEither<SyncError, T> =>
     TE.left(unknownError('Web Workers not available', null)),
   terminate: () => {},
 });

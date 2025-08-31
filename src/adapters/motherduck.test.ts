@@ -4,7 +4,6 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { pipe } from 'fp-ts/function';
-import * as E from 'fp-ts/Either';
 import { createMockMotherDuckClient } from './motherduck';
 import type { MotherDuckClient } from './motherduck';
 import type { DbRecord } from '../types';

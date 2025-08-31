@@ -83,7 +83,7 @@ export const retryWithBackoff = <A>(
 export const toSyncError = (error: unknown): SyncError => {
   // If it's already a SyncError, return it as-is
   if (error && typeof error === 'object' && 'type' in error && 'errorType' in error) {
-    return error as SyncError;
+    return error as unknown as SyncError;
   }
   
   if (error instanceof Error) {

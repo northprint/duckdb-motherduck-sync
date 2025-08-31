@@ -7,7 +7,7 @@ import { pipe } from 'fp-ts/function';
 import * as TE from 'fp-ts/TaskEither';
 import type { TaskEither } from 'fp-ts/TaskEither';
 import { MDConnection } from '@motherduck/wasm-client';
-import { networkError, authError, unknownError } from '../types/errors';
+import { networkError, authError } from '../types/errors';
 import type { SyncError } from '../types/errors';
 import type { DbRecord } from '../types';
 
@@ -212,13 +212,15 @@ export const createMotherDuckProductionClient = (): MotherDuckProductionClient =
       ),
 
     disconnect: () =>
-      TE.of(() => {
-        if (state.connection) {
-          console.log('Disconnecting from MotherDuck');
-          // Clean up connection
-          state.connection = null;
-          state.isInitialized = false;
-        }
-      })(),
+      TE.of<SyncError, void>(
+        (() => {
+          if (state.connection) {
+            console.log('Disconnecting from MotherDuck');
+            // Clean up connection
+            state.connection = null;
+            state.isInitialized = false;
+          }
+        })()
+      ),
   };
 };

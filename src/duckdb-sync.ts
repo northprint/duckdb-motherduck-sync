@@ -4,27 +4,54 @@
  * シンプルな同期ライブラリ - MotherDuckトークンだけで動作
  */
 
+interface DuckDBSyncConfig {
+  motherduckToken?: string | null;
+  syncInterval?: number;
+  autoSync?: boolean;
+  syncWorkerPath?: string;
+  wasmPath?: string;
+  workerPath?: string;
+}
+
+interface Change {
+  id: string;
+  table_name: string;
+  record_id: string;
+  operation: 'INSERT' | 'UPDATE' | 'DELETE';
+  data: any;
+  created_at: Date;
+  synced: boolean;
+}
+
+interface SyncResult {
+  pushed?: any[];
+  pulled?: any[];
+}
+
 class DuckDBSync {
-  constructor(config = {}) {
+  private config: Required<DuckDBSyncConfig>;
+  private db: any = null;
+  private conn: any = null;
+  private syncWorker: Worker | null = null;
+  private syncInProgress: boolean = false;
+  private listeners: Map<string, Array<(data?: any) => void>> = new Map();
+  private syncInterval: NodeJS.Timeout | null = null;
+
+  constructor(config: DuckDBSyncConfig = {}) {
     this.config = {
       motherduckToken: config.motherduckToken || null,
       syncInterval: config.syncInterval || 30000, // 30 seconds
       autoSync: config.autoSync !== false,
       syncWorkerPath: config.syncWorkerPath || '/public/duckdb-sync-worker.js',
-      ...config
+      wasmPath: config.wasmPath || '',
+      workerPath: config.workerPath || '',
     };
-    
-    this.db = null;
-    this.conn = null;
-    this.syncWorker = null;
-    this.syncInProgress = false;
-    this.listeners = new Map();
   }
 
   /**
    * Initialize local DuckDB
    */
-  async initialize() {
+  async initialize(): Promise<void> {
     // Dynamic import to avoid bundling issues
     const duckdb = await import('@duckdb/duckdb-wasm');
     
@@ -41,7 +68,7 @@ class DuckDBSync {
     });
     
     const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING);
-    const worker = new Worker(DUCKDB_CONFIG.mainWorker);
+    const worker = new Worker(DUCKDB_CONFIG.mainWorker!);
     
     this.db = new duckdb.AsyncDuckDB(logger, worker);
     await this.db.instantiate(DUCKDB_CONFIG.mainModule, DUCKDB_CONFIG.pthreadWorker);
@@ -80,39 +107,43 @@ class DuckDBSync {
   /**
    * Initialize sync worker
    */
-  async initializeSyncWorker() {
+  async initializeSyncWorker(): Promise<void> {
     this.syncWorker = new Worker(this.config.syncWorkerPath, { type: 'module' });
     
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Worker initialization timeout')), 10000);
       
-      this.syncWorker.onmessage = (event) => {
-        if (event.data.type === 'INITIALIZED') {
-          clearTimeout(timeout);
-          this.syncWorker.onmessage = this.handleWorkerMessage.bind(this);
-          
-          if (this.config.autoSync) {
-            this.startAutoSync();
+      if (this.syncWorker) {
+        this.syncWorker.onmessage = (event: MessageEvent) => {
+          if (event.data.type === 'INITIALIZED') {
+            clearTimeout(timeout);
+            if (this.syncWorker) {
+              this.syncWorker.onmessage = this.handleWorkerMessage.bind(this);
+            }
+            
+            if (this.config.autoSync) {
+              this.startAutoSync();
+            }
+            
+            resolve();
+          } else if (event.data.type === 'ERROR') {
+            clearTimeout(timeout);
+            reject(new Error(event.data.error));
           }
-          
-          resolve();
-        } else if (event.data.type === 'ERROR') {
-          clearTimeout(timeout);
-          reject(new Error(event.data.error));
-        }
-      };
-      
-      this.syncWorker.postMessage({
-        type: 'INITIALIZE',
-        token: this.config.motherduckToken
-      });
+        };
+        
+        this.syncWorker.postMessage({
+          type: 'INITIALIZE',
+          token: this.config.motherduckToken
+        });
+      }
     });
   }
 
   /**
    * Track table for sync
    */
-  async trackTable(tableName, options = {}) {
+  async trackTable(tableName: string, options: { trackQuery?: string } = {}): Promise<void> {
     const trackQuery = options.trackQuery || `
       CREATE TRIGGER IF NOT EXISTS ${tableName}_sync_trigger
       AFTER INSERT OR UPDATE OR DELETE ON ${tableName}
@@ -153,14 +184,14 @@ class DuckDBSync {
   /**
    * Get connection for direct queries
    */
-  getConnection() {
+  getConnection(): any {
     return this.conn;
   }
 
   /**
    * Execute query
    */
-  async query(sql, params = []) {
+  async query(sql: string, params: any[] = []): Promise<any[]> {
     const result = await this.conn.query(sql, params);
     return result.toArray();
   }
@@ -168,7 +199,7 @@ class DuckDBSync {
   /**
    * Sync now
    */
-  async sync() {
+  async sync(): Promise<void> {
     if (!this.syncWorker) {
       throw new Error('Sync not configured. Please provide MotherDuck token.');
     }
@@ -186,7 +217,7 @@ class DuckDBSync {
         SELECT * FROM _sync_changes WHERE NOT synced
         ORDER BY created_at
       `);
-      const pendingChanges = changes.toArray();
+      const pendingChanges: Change[] = changes.toArray();
       
       if (pendingChanges.length === 0) {
         this.emit('sync-complete', { changes: 0 });
@@ -197,9 +228,9 @@ class DuckDBSync {
       const tables = await this.conn.query(`
         SELECT DISTINCT table_name FROM _sync_metadata
       `);
-      const tableNames = tables.toArray().map(t => t.table_name);
+      const tableNames: string[] = tables.toArray().map((t: any) => t.table_name);
       
-      const schemas = {};
+      const schemas: Record<string, any[]> = {};
       for (const tableName of tableNames) {
         const schema = await this.conn.query(`
           SELECT column_name, data_type 
@@ -244,7 +275,7 @@ class DuckDBSync {
   /**
    * Apply pulled changes
    */
-  async applyPulledChanges(changes) {
+  async applyPulledChanges(changes: any[]): Promise<void> {
     for (const change of changes) {
       try {
         const { table_name, operation, data } = change;
@@ -273,13 +304,15 @@ class DuckDBSync {
   /**
    * Send message to worker
    */
-  sendToWorker(message) {
+  sendToWorker(message: any): Promise<SyncResult> {
     return new Promise((resolve, reject) => {
       const id = Math.random().toString(36).substring(2, 11);
       
-      const handler = (event) => {
+      const handler = (event: MessageEvent) => {
         if (event.data.id === id) {
-          this.syncWorker.removeEventListener('message', handler);
+          if (this.syncWorker) {
+            this.syncWorker.removeEventListener('message', handler);
+          }
           
           if (event.data.type === 'SUCCESS') {
             resolve(event.data.result);
@@ -289,15 +322,17 @@ class DuckDBSync {
         }
       };
       
-      this.syncWorker.addEventListener('message', handler);
-      this.syncWorker.postMessage({ ...message, id });
+      if (this.syncWorker) {
+        this.syncWorker.addEventListener('message', handler);
+        this.syncWorker.postMessage({ ...message, id });
+      }
     });
   }
 
   /**
    * Handle worker messages
    */
-  handleWorkerMessage(event) {
+  handleWorkerMessage(event: MessageEvent): void {
     // Handle async messages from worker
     if (event.data.type === 'SYNC_STATUS') {
       this.emit('sync-status', event.data);
@@ -307,7 +342,7 @@ class DuckDBSync {
   /**
    * Start auto sync
    */
-  startAutoSync() {
+  startAutoSync(): void {
     this.stopAutoSync();
     
     this.syncInterval = setInterval(() => {
@@ -320,7 +355,7 @@ class DuckDBSync {
   /**
    * Stop auto sync
    */
-  stopAutoSync() {
+  stopAutoSync(): void {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
       this.syncInterval = null;
@@ -330,14 +365,14 @@ class DuckDBSync {
   /**
    * Event handling
    */
-  on(event, callback) {
+  on(event: string, callback: (data?: any) => void): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
-    this.listeners.get(event).push(callback);
+    this.listeners.get(event)!.push(callback);
   }
 
-  off(event, callback) {
+  off(event: string, callback: (data?: any) => void): void {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
       const index = callbacks.indexOf(callback);
@@ -347,7 +382,7 @@ class DuckDBSync {
     }
   }
 
-  emit(event, data) {
+  emit(event: string, data?: any): void {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
       callbacks.forEach(cb => cb(data));
@@ -357,7 +392,7 @@ class DuckDBSync {
   /**
    * Cleanup
    */
-  async destroy() {
+  async destroy(): Promise<void> {
     this.stopAutoSync();
     
     if (this.syncWorker) {

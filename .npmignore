@@ -1,7 +1,8 @@
 # Source files (only include dist)
-src/
+# src/ is included for source maps
 test/
-examples/
+test-app/
+server/
 .tmp/
 
 # Config files

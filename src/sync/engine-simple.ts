@@ -5,7 +5,7 @@
 import { pipe } from 'fp-ts/function';
 import * as TE from 'fp-ts/TaskEither';
 import type { TaskEither } from 'fp-ts/TaskEither';
-import { Subject, Observable, EMPTY } from 'rxjs';
+import { Subject, Observable } from 'rxjs';
 import type {
   SyncConfig,
   SyncState,
@@ -13,6 +13,7 @@ import type {
   PushResult,
   PullResult,
   SyncError,
+  Change,
 } from '../types';
 import type { NetworkMonitor } from '../core/network-monitor';
 import type { ChangeTracker } from '../core/change-tracker';
@@ -69,7 +70,7 @@ export const createSimpleSyncEngine = (deps: SyncEngineDeps): SyncEngine => {
           if (!acc[table]) {
             acc[table] = [];
           }
-          acc[table].push(change);
+          (acc[table] as Change[]).push(change);
           return acc;
         }, {} as Record<string, typeof changes>);
 
@@ -104,10 +105,10 @@ export const createSimpleSyncEngine = (deps: SyncEngineDeps): SyncEngine => {
       TE.of(config?.tables || []),
       TE.chain((tables) => {
         if (tables.length === 0) {
-          return TE.of({ applied: 0, failed: 0, errors: [] });
+          return TE.of({ downloaded: 0, applied: 0, failed: 0, errors: [] });
         }
         // Simplified: just return success for now
-        return TE.of({ applied: 0, failed: 0, errors: [] });
+        return TE.of({ downloaded: 0, applied: 0, failed: 0, errors: [] });
       }),
     );
 

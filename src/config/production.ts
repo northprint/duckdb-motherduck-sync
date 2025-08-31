@@ -87,10 +87,10 @@ export const createProductionSyncConfig = (
     motherduckToken: token,
     tables,
     syncInterval: config.sync.defaultInterval,
-    conflictStrategy: 'latest-wins',
+    conflictStrategy: { type: 'latest-wins' } as const,
     enableCompression: config.sync.compressionEnabled,
     batchSize: config.sync.maxBatchSize,
-    maxRetries: config.sync.retryAttempts,
-    retryDelay: config.sync.retryDelay,
+    // maxRetries: config.sync.retryAttempts,
+    // retryDelay: config.sync.retryDelay,
   };
 };

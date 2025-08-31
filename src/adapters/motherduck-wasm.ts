@@ -76,7 +76,7 @@ export const createMotherDuckWASMClient = (): MotherDuckWASMClient => {
                 },
               };
             },
-            (error) => networkError('Query execution failed', true, undefined, { error: error instanceof Error ? error.message : String(error) }),
+            (error): SyncError => networkError('Query execution failed', true, undefined, { error: error instanceof Error ? error.message : String(error) }),
           ),
         ),
       ),
@@ -111,7 +111,7 @@ export const createMotherDuckWASMClient = (): MotherDuckWASMClient => {
             async () => {
               await conn.evaluateQuery(sql);
             },
-            (error) => networkError('Upload failed', true, undefined, { error: error instanceof Error ? error.message : String(error) }),
+            (error): SyncError => networkError('Upload failed', true, undefined, { error: error instanceof Error ? error.message : String(error) }),
           );
         }),
       ),
@@ -130,7 +130,7 @@ export const createMotherDuckWASMClient = (): MotherDuckWASMClient => {
               const result = await conn.evaluateQuery(sql);
               return result as ReadonlyArray<DbRecord>;
             },
-            (error) => networkError('Download failed', true, undefined, { error: error instanceof Error ? error.message : String(error) }),
+            (error): SyncError => networkError('Download failed', true, undefined, { error: error instanceof Error ? error.message : String(error) }),
           );
         }),
       ),

@@ -36,13 +36,13 @@ export const processBatch = <A, B>(
   
   // Process batches with controlled concurrency
   return pipe(
-    batches,
+    [...batches],
     A.chunksOf(options.concurrency),
     A.traverse(TE.ApplicativeSeq)((concurrentBatches) =>
       pipe(
-        concurrentBatches,
+        [...concurrentBatches],
         A.traverse(TE.ApplicativePar)(processor),
-        TE.map(A.flatten),
+        TE.map((arrays) => A.flatten(arrays as B[][])),
         TE.chainFirst(() =>
           options.delayBetweenBatches && options.delayBetweenBatches > 0
             ? delay(options.delayBetweenBatches)
@@ -50,7 +50,7 @@ export const processBatch = <A, B>(
         ),
       ),
     ),
-    TE.map(A.flatten),
+    TE.map((arrays: unknown[][]) => A.flatten(arrays as B[][])),
   );
 };
 
@@ -63,7 +63,7 @@ export const processWithRateLimit = <A, B>(
   const delayMs = Math.ceil(1000 / itemsPerSecond);
   
   return pipe(
-    items,
+    [...items],
     A.traverse(TE.ApplicativeSeq)((item) =>
       pipe(
         processor(item),

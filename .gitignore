@@ -15,8 +15,10 @@ coverage/
 *.lcov
 
 # Documentation
-docs/
 typedoc/
+# Keep architecture and development docs
+!docs/architecture/
+!docs/development/
 
 # IDE
 .vscode/

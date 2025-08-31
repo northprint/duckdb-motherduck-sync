@@ -4,7 +4,6 @@
 
 import { describe, it, expect } from 'vitest';
 import { pipe } from 'fp-ts/function';
-import * as E from 'fp-ts/Either';
 import {
   compress,
   decompress,

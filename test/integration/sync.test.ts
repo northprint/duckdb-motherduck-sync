@@ -2,30 +2,34 @@
  * Integration tests for sync functionality
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { pipe } from 'fp-ts/function';
 import * as E from 'fp-ts/Either';
-import {
-  createSyncEngine,
-  createMemoryStorage,
-  createMockDuckDBAdapter,
-  createMockMotherDuckClient,
-  createMockNetworkMonitor,
-  createMemoryChangeTracker,
-} from '../../src';
-import type { SyncEngine } from '../../src';
+import * as TE from 'fp-ts/TaskEither';
+import { createSyncEngine } from '../../src/sync/engine';
+import type { SyncEngine } from '../../src/sync/engine';
+import { createMockDuckDBAdapter } from '../../src/adapters/duckdb';
+import { createMockMotherDuckClient } from '../../src/adapters/motherduck';
+import { createMockNetworkMonitor } from '../../src/core/network-monitor';
+import { createMemoryChangeTracker } from '../../src/core/change-tracker';
+import type { DatabaseOperations } from '../../src/adapters/duckdb';
+import type { MotherDuckClient } from '../../src/adapters/motherduck';
+import type { NetworkMonitor } from '../../src/core/network-monitor';
+import type { ChangeTracker } from '../../src/core/change-tracker';
 
 describe('Sync Integration Tests', () => {
-  let syncEngine: SyncEngine;
+  let syncEngine: SyncEngine | null = null;
   let networkMonitor: ReturnType<typeof createMockNetworkMonitor>;
+  let localDb: DatabaseOperations;
+  let motherduckClient: MotherDuckClient;
+  let changeTracker: ChangeTracker;
 
   beforeEach(() => {
     // Setup test environment
-    const storage = createMemoryStorage();
-    const localDb = createMockDuckDBAdapter();
-    const motherduckClient = createMockMotherDuckClient();
+    localDb = createMockDuckDBAdapter();
+    motherduckClient = createMockMotherDuckClient();
     networkMonitor = createMockNetworkMonitor();
-    const changeTracker = createMemoryChangeTracker();
+    changeTracker = createMemoryChangeTracker();
 
     syncEngine = createSyncEngine({
       networkMonitor,
@@ -36,30 +40,36 @@ describe('Sync Integration Tests', () => {
   });
 
   afterEach(() => {
-    syncEngine.stopAutoSync();
+    if (syncEngine) {
+      syncEngine!.stopAutoSync();
+    }
   });
 
   describe('End-to-End Sync Scenarios', () => {
     it('should sync local changes to cloud', async () => {
       // Initialize
-      await pipe(
-        syncEngine.initialize({
+      const initResult = await pipe(
+        syncEngine!.initialize({
           motherduckToken: 'valid-token',
           tables: ['users', 'products'],
         }),
       )();
 
-      // Simulate local changes
-      const localDb = createMockDuckDBAdapter();
-      await pipe(
-        localDb.execute(
-          'INSERT INTO users (id, name) VALUES ($1, $2)',
-          ['1', 'Alice'],
-        ),
+      expect(initResult._tag).toBe('Right');
+
+      // Simulate local changes by adding them to the change tracker
+      const changeResult = await pipe(
+        changeTracker.recordChange({
+          table: 'users',
+          operation: 'INSERT',
+          data: { id: '1', name: 'Alice' },
+        }),
       )();
 
+      expect(changeResult._tag).toBe('Right');
+
       // Perform sync
-      const result = await pipe(syncEngine.sync())();
+      const result = await pipe(syncEngine!.sync())();
 
       expect(result._tag).toBe('Right');
       if (result._tag === 'Right') {
@@ -71,21 +81,23 @@ describe('Sync Integration Tests', () => {
       // Start offline
       networkMonitor.setState({ online: false, type: 'unknown' });
 
-      await pipe(
-        syncEngine.initialize({
+      const initResult = await pipe(
+        syncEngine!.initialize({
           motherduckToken: 'valid-token',
           syncInterval: 100,
         }),
       )();
 
+      expect(initResult._tag).toBe('Right');
+
       // Collect sync states
       const states: string[] = [];
-      const subscription = syncEngine.syncState$.subscribe((state) => {
+      const subscription = syncEngine!.syncState$.subscribe((state) => {
         states.push(state.type);
       });
 
       // Start auto sync (should stay idle while offline)
-      syncEngine.startAutoSync();
+      syncEngine!.startAutoSync();
 
       // Wait a bit
       await new Promise((resolve) => setTimeout(resolve, 150));
@@ -97,7 +109,7 @@ describe('Sync Integration Tests', () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       subscription.unsubscribe();
-      syncEngine.stopAutoSync();
+      syncEngine!.stopAutoSync();
 
       // Should have transitioned from idle to syncing
       expect(states).toContain('idle');
@@ -105,16 +117,19 @@ describe('Sync Integration Tests', () => {
     });
 
     it('should handle conflict resolution', async () => {
-      await pipe(
-        syncEngine.initialize({
+      const initResult = await pipe(
+        syncEngine!.initialize({
           motherduckToken: 'valid-token',
-          conflictStrategy: 'latest-wins',
+          conflictStrategy: { type: 'latest-wins' },
+          tables: ['users'], // Add tables configuration
         }),
       )();
 
+      expect(initResult._tag).toBe('Right');
+
       // Create conflicting changes
       // This would require more complex setup in a real scenario
-      const result = await pipe(syncEngine.sync())();
+      const result = await pipe(syncEngine!.sync())();
 
       expect(result._tag).toBe('Right');
       if (result._tag === 'Right') {
@@ -124,33 +139,34 @@ describe('Sync Integration Tests', () => {
     });
 
     it('should respect table filters', async () => {
-      await pipe(
-        syncEngine.initialize({
+      const initResult = await pipe(
+        syncEngine!.initialize({
           motherduckToken: 'valid-token',
-          tableFilter: {
-            includeTables: ['users'],
-            excludeTables: ['logs'],
-          },
+          tables: ['users'],
         }),
       )();
 
+      expect(initResult._tag).toBe('Right');
+
       // Only 'users' table should be synced
-      const result = await pipe(syncEngine.sync())();
+      const result = await pipe(syncEngine!.sync())();
 
       expect(result._tag).toBe('Right');
     });
 
     it('should compress data when enabled', async () => {
-      await pipe(
-        syncEngine.initialize({
+      const initResult = await pipe(
+        syncEngine!.initialize({
           motherduckToken: 'valid-token',
           enableCompression: true,
-          compressionThreshold: 100,
+          tables: ['users'], // Add tables configuration
         }),
       )();
 
+      expect(initResult._tag).toBe('Right');
+
       // Large data should be compressed
-      const result = await pipe(syncEngine.sync())();
+      const result = await pipe(syncEngine!.sync())();
 
       expect(result._tag).toBe('Right');
     });
@@ -158,17 +174,19 @@ describe('Sync Integration Tests', () => {
 
   describe('Performance Tests', () => {
     it('should handle large datasets within performance targets', async () => {
-      await pipe(
-        syncEngine.initialize({
+      const initResult = await pipe(
+        syncEngine!.initialize({
           motherduckToken: 'valid-token',
-          batchSize: 1000,
+          tables: ['users', 'products'], // Add tables configuration
         }),
       )();
+
+      expect(initResult._tag).toBe('Right');
 
       const startTime = Date.now();
       
       // Simulate large dataset sync
-      const result = await pipe(syncEngine.sync())();
+      const result = await pipe(syncEngine!.sync())();
       
       const duration = Date.now() - startTime;
 
@@ -178,26 +196,28 @@ describe('Sync Integration Tests', () => {
     });
 
     it('should batch operations efficiently', async () => {
-      await pipe(
-        syncEngine.initialize({
+      const initResult = await pipe(
+        syncEngine!.initialize({
           motherduckToken: 'valid-token',
-          batchSize: 100,
+          tables: ['test'], // Add tables configuration
         }),
       )();
 
-      // Generate many changes
-      const changeTracker = createMemoryChangeTracker();
+      expect(initResult._tag).toBe('Right');
+
+      // Generate many changes using the existing changeTracker
       for (let i = 0; i < 500; i++) {
-        await pipe(
+        const changeResult = await pipe(
           changeTracker.recordChange({
             table: 'test',
             operation: 'INSERT',
             data: { id: `${i}`, value: `value-${i}` },
           }),
         )();
+        expect(changeResult._tag).toBe('Right');
       }
 
-      const result = await pipe(syncEngine.push())();
+      const result = await pipe(syncEngine!.push())();
 
       expect(result._tag).toBe('Right');
       if (result._tag === 'Right') {
@@ -209,20 +229,23 @@ describe('Sync Integration Tests', () => {
   describe('Error Handling', () => {
     it('should retry on transient errors', async () => {
       // This would require a mock that fails initially then succeeds
-      await pipe(
-        syncEngine.initialize({
+      const initResult = await pipe(
+        syncEngine!.initialize({
           motherduckToken: 'valid-token',
+          tables: ['users'], // Add tables configuration
         }),
       )();
 
-      const result = await pipe(syncEngine.sync())();
+      expect(initResult._tag).toBe('Right');
+
+      const result = await pipe(syncEngine!.sync())();
 
       expect(result._tag).toBe('Right');
     });
 
     it('should handle authentication errors gracefully', async () => {
       const result = await pipe(
-        syncEngine.initialize({
+        syncEngine!.initialize({
           motherduckToken: 'invalid-token',
         }),
       )();

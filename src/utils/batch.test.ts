@@ -13,7 +13,6 @@ import {
   estimateObjectSize,
   createBatchProcessor,
 } from './batch';
-import type { SyncError } from '../types/errors';
 
 describe('Batch Processing', () => {
   describe('chunkArray', () => {

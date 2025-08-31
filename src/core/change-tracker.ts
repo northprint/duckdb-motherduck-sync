@@ -3,15 +3,13 @@
  */
 
 import { pipe } from 'fp-ts/function';
-import * as TE from 'fp-ts/TaskEither';
-import * as A from 'fp-ts/Array';
 import * as O from 'fp-ts/Option';
+import * as TE from 'fp-ts/TaskEither';
 import type { TaskEither } from 'fp-ts/TaskEither';
 import { v4 as uuidv4 } from 'uuid';
-import type { Change, SyncError, DbRecord } from '../types';
+import type { Change, SyncError, DbRecord, DbValue } from '../types';
 import type { DatabaseOperations } from '../adapters/duckdb';
 import type { StorageOperations } from '../adapters/storage';
-import { unknownError } from '../types/errors';
 
 // Change tracker interface
 export interface ChangeTracker {
@@ -22,8 +20,8 @@ export interface ChangeTracker {
 }
 
 // Change storage key prefix
-const CHANGE_PREFIX = 'change:';
-const SYNC_STATUS_PREFIX = 'sync:';
+// const CHANGE_PREFIX = 'change:';
+// const SYNC_STATUS_PREFIX = 'sync:';
 
 // Create change tracker
 export const createChangeTracker = (
@@ -104,14 +102,7 @@ export const createChangeTracker = (
       pipe(
         ensureInitialized,
         TE.chain(() =>
-          db.query<{
-            id: string;
-            table_name: string;
-            operation: string;
-            timestamp: number;
-            data: string;
-            old_data: string | null;
-          }>(
+          db.query(
             `SELECT id, table_name, operation, timestamp, data, old_data
              FROM _sync_changes
              WHERE synced = 0 AND timestamp > $1
@@ -119,8 +110,8 @@ export const createChangeTracker = (
             [since],
           ),
         ),
-        TE.map(
-          A.map((row) => ({
+        TE.map((rows: ReadonlyArray<Readonly<Record<string, DbValue>>>) =>
+          rows.map((row) => ({
             id: row['id'] as string,
             table: row['table_name'] as string,
             operation: row['operation'] as Change['operation'],

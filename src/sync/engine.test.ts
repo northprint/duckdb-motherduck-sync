@@ -2,9 +2,8 @@
  * Tests for sync engine
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { pipe } from 'fp-ts/function';
-import * as TE from 'fp-ts/TaskEither';
 import { firstValueFrom } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 import { createSyncEngine } from './engine';
@@ -13,7 +12,7 @@ import { createMemoryChangeTracker } from '../core/change-tracker';
 import { createMockDuckDBAdapter } from '../adapters/duckdb';
 import { createMockMotherDuckClient } from '../adapters/motherduck';
 import type { SyncEngine, SyncEngineDeps } from './engine';
-import type { SyncConfig } from '../types';
+import type { SyncConfig, SyncState } from '../types';
 
 describe('Sync Engine', () => {
   let engine: SyncEngine;

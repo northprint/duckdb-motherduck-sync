@@ -2,8 +2,8 @@
  * Network connection monitoring
  */
 
-import { Subject, Observable, fromEvent, merge, of, interval } from 'rxjs';
-import { map, distinctUntilChanged, startWith, share, filter, switchMap } from 'rxjs/operators';
+import { Subject, Observable, fromEvent, merge, of } from 'rxjs';
+import { map, distinctUntilChanged, startWith, share } from 'rxjs/operators';
 import * as TE from 'fp-ts/TaskEither';
 import type { TaskEither } from 'fp-ts/TaskEither';
 import { networkError } from '../types/errors';
@@ -125,7 +125,7 @@ export const createNetworkMonitor = (): NetworkMonitor => {
       TE.tryCatch(
         async () => {
           try {
-            const response = await fetch(url, {
+            await fetch(url, {
               method: 'HEAD',
               mode: 'no-cors',
               cache: 'no-cache',
@@ -135,7 +135,7 @@ export const createNetworkMonitor = (): NetworkMonitor => {
             return false;
           }
         },
-        (error) => networkError('Connectivity test failed', false),
+        (_error) => networkError('Connectivity test failed', false),
       ),
   };
 };
@@ -154,7 +154,7 @@ export const createMockNetworkMonitor = (
       startWith(currentState),
     ),
     
-    testConnectivity: (url: string) =>
+    testConnectivity: (_url: string) =>
       TE.of(currentState.online),
     
     setState: (state: NetworkState) => {

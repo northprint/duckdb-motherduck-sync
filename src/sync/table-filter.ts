@@ -4,7 +4,6 @@
 
 import { pipe } from 'fp-ts/function';
 import * as A from 'fp-ts/Array';
-import * as O from 'fp-ts/Option';
 import type { Change } from '../types';
 
 // Table filter configuration
@@ -64,7 +63,7 @@ export const filterChangesByTable = (
 ): ReadonlyArray<Change> =>
   pipe(
     changes,
-    A.filter((change) => filter(change.table)),
+    A.filter((change: Change) => filter(change.table)) as (changes: ReadonlyArray<Change>) => Change[],
   );
 
 // Create default filters for common scenarios
@@ -118,8 +117,8 @@ export const filterTablesByMetadata = (
 ): ReadonlyArray<string> =>
   pipe(
     tables,
-    A.filter(predicate),
-    A.map(t => t.name),
+    A.filter(predicate) as (tables: ReadonlyArray<TableMetadata>) => TableMetadata[],
+    A.map((t: TableMetadata) => t.name),
   );
 
 // Common metadata filters

@@ -5,7 +5,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { pipe } from 'fp-ts/function';
 import { createMemoryChangeTracker } from './change-tracker';
-import type { Change } from '../types';
 
 describe('Change Tracker', () => {
   describe('Memory Tracker', () => {
@@ -61,7 +60,7 @@ describe('Change Tracker', () => {
     });
 
     it('should filter changes by timestamp', async () => {
-      const beforeTimestamp = Date.now();
+      const _beforeTimestamp = Date.now();
 
       await pipe(tracker.recordChange({
         table: 'old',
