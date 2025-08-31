@@ -15,5 +15,14 @@ export {
   QueryResultCodec,
   ApiErrorCodec,
   validate,
-  type QueryResult 
+  type QueryResult,
+  DbRecordSchema,
+  ChangeSchema,
+  SyncStateSchema,
+  ConflictSchema,
+  SyncConfigSchema,
+  validateDbRecord,
+  validateChange,
+  validateSyncState,
+  validateSyncConfig
 } from './schemas';

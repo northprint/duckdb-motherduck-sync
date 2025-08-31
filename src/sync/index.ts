@@ -3,10 +3,21 @@
  */
 
 export * from './engine';
-export * from './conflict-resolver';
+export { 
+  type ConflictResolver,
+  type ConflictResolution,
+  resolveConflict
+} from './conflict-resolver';
 export { 
   type ConflictDetectionOptions,
   recordsConflict,
-  createConflictDetector
+  createConflictDetector,
+  detectConflicts
 } from './conflict-detector';
-export * from './table-filter';
+export { 
+  type TableFilter,
+  type TableFilterConfig,
+  createTableFilter,
+  createIncludeFilter,
+  createExcludeFilter
+} from './table-filter';
