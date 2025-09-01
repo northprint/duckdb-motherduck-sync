@@ -190,6 +190,9 @@ export const createMotherDuckClient = (
   };
 };
 
+// Create MotherDuck adapter (alias for createMotherDuckClient)
+export const createMotherDuckAdapter = createMotherDuckClient;
+
 // Create mock client for testing
 export const createMockMotherDuckClient = (): MotherDuckClient => {
   const mockData = new Map<string, DbRecord[]>();

@@ -14,6 +14,17 @@ import type {
   MergeFunction,
 } from '../types';
 
+// Type definitions
+export type ConflictResolver = (
+  conflict: Conflict,
+  strategy: ConflictStrategy
+) => Either<Error, DbRecord>;
+
+export interface ConflictResolution {
+  conflict: Conflict;
+  resolution: DbRecord;
+}
+
 // Detect conflicts between local and remote changes
 export const detectConflicts = (
   localChanges: ReadonlyArray<Change>,

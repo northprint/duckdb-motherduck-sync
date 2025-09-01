@@ -21,7 +21,7 @@ const defaultOptions: CompressionOptions = {
 };
 
 // Compress data
-export const compress = (
+export const compressData = (
   data: string | Uint8Array,
   options: CompressionOptions = defaultOptions,
 ): TaskEither<SyncError, Uint8Array> =>
@@ -43,7 +43,7 @@ export const compress = (
   );
 
 // Decompress data
-export const decompress = (
+export const decompressData = (
   data: Uint8Array,
 ): TaskEither<SyncError, Uint8Array> =>
   TE.tryCatch(
@@ -68,7 +68,7 @@ export const compressJson = <T>(
       async () => JSON.stringify(data),
       (error) => unknownError('JSON serialization failed', error),
     ),
-    TE.chain((json) => compress(json, options)),
+    TE.chain((json) => compressData(json, options)),
   );
 
 // Decompress JSON data
@@ -76,7 +76,7 @@ export const decompressJson = <T = unknown>(
   data: Uint8Array,
 ): TaskEither<SyncError, T> =>
   pipe(
-    decompress(data),
+    decompressData(data),
     TE.chain((decompressed) =>
       TE.tryCatch(
         async () => {

@@ -6,6 +6,9 @@ import { pipe } from 'fp-ts/function';
 import * as A from 'fp-ts/Array';
 import type { Change } from '../types';
 
+// Type definitions
+export type TableFilter = (table: string) => boolean;
+
 // Table filter configuration
 export interface TableFilterConfig {
   readonly includeTables?: ReadonlyArray<string>;
@@ -134,4 +137,28 @@ export const metadataFilters = {
   // Only sync tables within size limit
   withinSizeLimit: (maxSizeMB: number): ((metadata: TableMetadata) => boolean) =>
     (metadata) => (metadata.sizeBytes || 0) <= maxSizeMB * 1024 * 1024,
+};
+
+// Create include filter
+export const createIncludeFilter = (
+  tables: ReadonlyArray<string>,
+  patterns?: ReadonlyArray<RegExp>
+): TableFilter => {
+  const config: TableFilterConfig = {
+    includeTables: tables,
+    includePatterns: patterns
+  };
+  return createTableFilter(config);
+};
+
+// Create exclude filter  
+export const createExcludeFilter = (
+  tables: ReadonlyArray<string>,
+  patterns?: ReadonlyArray<RegExp>
+): TableFilter => {
+  const config: TableFilterConfig = {
+    excludeTables: tables,
+    excludePatterns: patterns
+  };
+  return createTableFilter(config);
 };

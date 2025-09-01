@@ -142,3 +142,95 @@ export type Change = t.TypeOf<typeof ChangeCodec>;
 export type Conflict = t.TypeOf<typeof ConflictCodec>;
 export type NetworkState = t.TypeOf<typeof NetworkStateCodec>;
 export type QueryResult = t.TypeOf<typeof QueryResultCodec>;
+
+// Additional schemas for compatibility
+export const DbRecordSchema = t.type({
+  id: t.string,
+  table: t.string,
+  data: DbRecordCodec,
+  timestamp: DateFromNumber,
+  version: t.number,
+  checksum: t.string
+});
+
+export const ChangeSchema = t.type({
+  id: t.string,
+  type: t.union([t.literal('insert'), t.literal('update'), t.literal('delete')]),
+  table: t.string,
+  data: DbRecordCodec,
+  timestamp: DateFromNumber,
+  recordId: t.string,
+  oldData: t.union([DbRecordCodec, t.undefined])
+});
+
+export const SyncStateSchema = t.union([
+  t.type({ type: t.literal('idle') }),
+  t.type({ 
+    type: t.literal('syncing'),
+    direction: t.union([t.literal('push'), t.literal('pull'), t.literal('both')]),
+    progress: t.number
+  }),
+  t.type({ 
+    type: t.literal('error'),
+    error: t.unknown // Error objects don't serialize well, so we use unknown
+  }),
+  t.type({ 
+    type: t.literal('success'),
+    lastSync: DateFromNumber
+  })
+]);
+
+export const ConflictSchema = t.type({
+  id: t.string,
+  table: t.string,
+  key: DbRecordCodec,
+  localValue: DbRecordCodec,
+  remoteValue: DbRecordCodec,
+  localTimestamp: DateFromNumber,
+  remoteTimestamp: DateFromNumber,
+  detectedAt: DateFromNumber
+});
+
+export const ConflictStrategySchema = t.union([
+  t.type({ type: t.literal('local-wins') }),
+  t.type({ type: t.literal('remote-wins') }),
+  t.type({ type: t.literal('latest-wins') }),
+  t.type({ 
+    type: t.literal('custom'),
+    resolver: t.unknown // Function types can't be properly serialized
+  })
+]);
+
+export const SyncConfigSchema = t.intersection([
+  t.type({
+    motherduckToken: t.string
+  }),
+  t.partial({
+    tables: t.array(t.string),
+    syncInterval: t.number,
+    autoSync: t.boolean,
+    conflictStrategy: ConflictStrategySchema,
+    compression: t.type({
+      enabled: t.boolean,
+      threshold: t.number
+    }),
+    retry: t.type({
+      maxAttempts: t.number,
+      initialDelay: t.number,
+      maxDelay: t.number
+    })
+  })
+]);
+
+// Validation functions
+export const validateDbRecord = (value: unknown): Either<Error, t.TypeOf<typeof DbRecordSchema>> => 
+  validate(DbRecordSchema)(value);
+
+export const validateChange = (value: unknown): Either<Error, t.TypeOf<typeof ChangeSchema>> => 
+  validate(ChangeSchema)(value);
+
+export const validateSyncState = (value: unknown): Either<Error, t.TypeOf<typeof SyncStateSchema>> => 
+  validate(SyncStateSchema)(value);
+
+export const validateSyncConfig = (value: unknown): Either<Error, t.TypeOf<typeof SyncConfigSchema>> => 
+  validate(SyncConfigSchema)(value);
