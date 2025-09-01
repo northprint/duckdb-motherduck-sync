@@ -110,6 +110,11 @@ export interface Logger {
 
 export const consoleLogger: Logger = {
   log: (level, message, context) => {
+    // Skip all logs in test environment if LOG_LEVEL is not set
+    if (process.env['NODE_ENV'] === 'test' && !process.env['LOG_LEVEL']) {
+      return;
+    }
+    
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
     
