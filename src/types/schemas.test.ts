@@ -5,11 +5,6 @@
 import { describe, it, expect } from 'vitest';
 import * as E from 'fp-ts/Either';
 import {
-  DbRecordSchema,
-  ChangeSchema,
-  SyncStateSchema,
-  ConflictSchema,
-  SyncConfigSchema,
   validateDbRecord,
   validateChange,
   validateSyncState,
@@ -37,7 +32,7 @@ describe('Schema Validation', () => {
         id: '123',
         table: 'users',
         data: { name: 'John', age: 30 },
-        timestamp: new Date('2024-01-01'),
+        timestamp: new Date('2024-01-01').getTime(),
         version: 1,
         checksum: 'abc123'
       };
@@ -64,7 +59,7 @@ describe('Schema Validation', () => {
         type: 'insert',
         table: 'products',
         data: { name: 'Widget' },
-        timestamp: new Date('2024-01-02'),
+        timestamp: new Date('2024-01-02').getTime(),
         recordId: 'prod-1'
       };
 
