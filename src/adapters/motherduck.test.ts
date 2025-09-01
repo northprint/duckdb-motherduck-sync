@@ -449,7 +449,7 @@ describe('MotherDuck Adapter', () => {
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
             'Authorization': 'Bearer test-token',
-            'User-Agent': 'duckdb-motherduck-sync/0.1.0',
+            'User-Agent': 'duckdb-motherduck-sync/0.1.1',
           }),
         })
       );

@@ -1,6 +1,6 @@
 {
   "name": "duckdb-motherduck-sync",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sync middleware for DuckDB WASM and MotherDuck cloud storage",
   "type": "module",
   "main": "./src/index-simple.js",

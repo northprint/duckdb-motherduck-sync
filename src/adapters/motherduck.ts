@@ -113,7 +113,7 @@ export const createMotherDuckClient = (
   const headers = (): HeadersInit => ({
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${authToken}`,
-    'User-Agent': 'duckdb-motherduck-sync/0.1.0',
+    'User-Agent': 'duckdb-motherduck-sync/0.1.1',
   });
 
   return {

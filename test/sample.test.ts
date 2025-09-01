@@ -3,7 +3,7 @@ import { version } from '../src/index';
 
 describe('Project Setup', () => {
   it('should export version', () => {
-    expect(version).toBe('0.1.0');
+    expect(version).toBe('0.1.1');
   });
 
   it('should have proper TypeScript configuration', () => {

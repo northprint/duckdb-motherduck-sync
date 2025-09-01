@@ -13,7 +13,7 @@ import type { SyncConfig } from './duckdb-sync-functional';
 export * from './duckdb-sync-functional';
 
 // Export version
-export const version = '0.1.0';
+export const version = '0.1.1';
 
 // Helper function to convert config
 const convertConfig = (config: any = {}): Partial<SyncConfig> => ({
