@@ -4,8 +4,6 @@
 
 export * from './engine';
 export { 
-  type ConflictResolver,
-  type ConflictResolution,
   resolveConflict
 } from './conflict-resolver';
 export { 
@@ -15,9 +13,6 @@ export {
   detectConflicts
 } from './conflict-detector';
 export { 
-  type TableFilter,
   type TableFilterConfig,
-  createTableFilter,
-  createIncludeFilter,
-  createExcludeFilter
+  createTableFilter
 } from './table-filter';
