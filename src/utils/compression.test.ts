@@ -5,8 +5,8 @@
 import { describe, it, expect } from 'vitest';
 import { pipe } from 'fp-ts/function';
 import {
-  compress,
-  decompress,
+  compressData,
+  decompressData,
   compressJson,
   decompressJson,
   calculateCompressionRatio,
@@ -16,7 +16,7 @@ describe('Compression Utilities', () => {
   describe('compress', () => {
     it('should compress string data', async () => {
       const data = 'Hello, World! '.repeat(100);
-      const result = await pipe(compress(data))();
+      const result = await pipe(compressData(data))();
 
       expect(result._tag).toBe('Right');
       if (result._tag === 'Right') {
@@ -27,7 +27,7 @@ describe('Compression Utilities', () => {
 
     it('should compress binary data', async () => {
       const data = new Uint8Array(2000).fill(65); // 'A' repeated (increased size)
-      const result = await pipe(compress(data))();
+      const result = await pipe(compressData(data))();
 
       expect(result._tag).toBe('Right');
       if (result._tag === 'Right') {
@@ -39,7 +39,7 @@ describe('Compression Utilities', () => {
 
     it('should skip compression for small data', async () => {
       const data = 'Small';
-      const result = await pipe(compress(data, { threshold: 100 }))();
+      const result = await pipe(compressData(data, { threshold: 100 }))();
 
       expect(result._tag).toBe('Right');
       if (result._tag === 'Right') {
@@ -53,11 +53,11 @@ describe('Compression Utilities', () => {
   describe('decompress', () => {
     it('should decompress compressed data', async () => {
       const original = 'Hello, World! '.repeat(100);
-      const compressed = await pipe(compress(original))();
+      const compressed = await pipe(compressData(original))();
 
       expect(compressed._tag).toBe('Right');
       if (compressed._tag === 'Right') {
-        const result = await pipe(decompress(compressed.right))();
+        const result = await pipe(decompressData(compressed.right))();
 
         if (result._tag === 'Left') {
           console.error('Decompression error:', result.left);
@@ -72,7 +72,7 @@ describe('Compression Utilities', () => {
 
     it('should handle uncompressed data', async () => {
       const data = new TextEncoder().encode('Not compressed');
-      const result = await pipe(decompress(data))();
+      const result = await pipe(decompressData(data))();
 
       expect(result._tag).toBe('Right');
       if (result._tag === 'Right') {

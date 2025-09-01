@@ -2,10 +2,10 @@
  * Tests for network monitor
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
-import { createMockNetworkMonitor } from './network-monitor';
+import { createMockNetworkMonitor, createNetworkMonitor } from './network-monitor';
 import type { NetworkState } from '../types';
 
 describe('Network Monitor', () => {
@@ -131,6 +131,258 @@ describe('Network Monitor', () => {
       // Both subscribers should receive the same states
       expect(states1).toEqual(states2);
       expect(states1).toHaveLength(2);
+    });
+  });
+
+  describe('Real Network Monitor', () => {
+    let mockNavigator: any;
+    let mockWindow: any;
+    let mockConnection: any;
+    let eventListeners: Record<string, Array<(event: any) => void>>;
+
+    beforeEach(() => {
+      // Mock navigator
+      mockNavigator = {
+        onLine: true,
+      };
+      Object.defineProperty(globalThis, 'navigator', {
+        value: mockNavigator,
+        writable: true,
+        configurable: true,
+      });
+
+      // Mock window events using fromEvent
+      eventListeners = {
+        online: [],
+        offline: [],
+        change: [],
+      };
+      
+      // Create a mock event target for window
+      const mockEventTarget = {
+        addEventListener: vi.fn((event: string, handler: (event: any) => void) => {
+          if (!eventListeners[event]) eventListeners[event] = [];
+          eventListeners[event].push(handler);
+        }),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      };
+      
+      // Mock window with event target functionality
+      mockWindow = mockEventTarget;
+      Object.defineProperty(globalThis, 'window', {
+        value: mockWindow,
+        writable: true,
+        configurable: true,
+      });
+
+      // Mock network connection
+      mockConnection = {
+        type: 'wifi',
+        effectiveType: '4g',
+        addEventListener: vi.fn((event, handler) => {
+          if (!eventListeners[event]) eventListeners[event] = [];
+          eventListeners[event].push(handler);
+        }),
+        removeEventListener: vi.fn(),
+      };
+
+      // Mock fetch
+      globalThis.fetch = vi.fn().mockResolvedValue({} as any);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should get current network state', () => {
+      const monitor = createNetworkMonitor();
+      const state = monitor.getCurrentState();
+
+      expect(state.online).toBe(true);
+      expect(state.type).toBe('unknown'); // No connection API available
+    });
+
+    it('should detect network type from connection API', () => {
+      // Add connection to navigator
+      mockNavigator.connection = mockConnection;
+
+      const monitor = createNetworkMonitor();
+      const state = monitor.getCurrentState();
+
+      expect(state.online).toBe(true);
+      expect(state.type).toBe('wifi');
+      expect(state.effectiveType).toBe('4g');
+    });
+
+    it('should handle different connection types', () => {
+      const connectionTypes = [
+        { type: 'cellular', expected: 'cellular' },
+        { type: 'ethernet', expected: 'ethernet' },
+        { type: 'bluetooth', expected: 'unknown' },
+        { type: 'other', expected: 'unknown' },
+        { type: 'none', expected: 'unknown' },
+      ];
+
+      connectionTypes.forEach(({ type, expected }) => {
+        mockNavigator.connection = { ...mockConnection, type };
+        const monitor = createNetworkMonitor();
+        const state = monitor.getCurrentState();
+        expect(state.type).toBe(expected);
+      });
+    });
+
+    it('should handle vendor-prefixed connection APIs', () => {
+      // Test mozConnection
+      mockNavigator.mozConnection = mockConnection;
+      let monitor = createNetworkMonitor();
+      let state = monitor.getCurrentState();
+      expect(state.type).toBe('wifi');
+
+      // Test webkitConnection
+      delete mockNavigator.mozConnection;
+      mockNavigator.webkitConnection = mockConnection;
+      monitor = createNetworkMonitor();
+      state = monitor.getCurrentState();
+      expect(state.type).toBe('wifi');
+    });
+
+    it('should register online/offline event listeners', () => {
+      const monitor = createNetworkMonitor();
+      
+      // Check that event listeners were registered
+      expect(mockWindow.addEventListener).toHaveBeenCalled();
+      const calls = mockWindow.addEventListener.mock.calls;
+      expect(calls.some((call: any[]) => call[0] === 'online')).toBe(true);
+      expect(calls.some((call: any[]) => call[0] === 'offline')).toBe(true);
+      
+      // Verify state observable exists
+      expect(monitor.state$).toBeDefined();
+    });
+
+    it('should register connection change listener when available', () => {
+      mockNavigator.connection = mockConnection;
+      const monitor = createNetworkMonitor();
+      
+      // Check that connection event listener was registered
+      expect(mockConnection.addEventListener).toHaveBeenCalled();
+      const calls = mockConnection.addEventListener.mock.calls;
+      expect(calls.some((call: any[]) => call[0] === 'change')).toBe(true);
+      
+      // Verify initial state has connection info
+      const state = monitor.getCurrentState();
+      expect(state.type).toBe('wifi');
+      expect(state.effectiveType).toBe('4g');
+    });
+
+    it('should handle no connection API gracefully', () => {
+      // No connection API available
+      const monitor = createNetworkMonitor();
+      
+      const state = monitor.getCurrentState();
+      expect(state.type).toBe('unknown');
+      expect(state.effectiveType).toBeUndefined();
+    });
+
+    it('should test connectivity successfully', async () => {
+      const monitor = createNetworkMonitor();
+      
+      const result = await monitor.testConnectivity('https://example.com')();
+      
+      expect(result._tag).toBe('Right');
+      if (result._tag === 'Right') {
+        expect(result.right).toBe(true);
+      }
+      
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'https://example.com',
+        {
+          method: 'HEAD',
+          mode: 'no-cors',
+          cache: 'no-cache',
+        }
+      );
+    });
+
+    it('should handle connectivity test failure', async () => {
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
+      
+      const monitor = createNetworkMonitor();
+      const result = await monitor.testConnectivity('https://example.com')();
+      
+      expect(result._tag).toBe('Right');
+      if (result._tag === 'Right') {
+        expect(result.right).toBe(false);
+      }
+    });
+
+    it('should handle connectivity test exception', async () => {
+      // The current implementation catches all errors in the try/catch
+      // and returns false, not an error
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+        throw new Error('Sync error');
+      });
+      
+      const monitor = createNetworkMonitor();
+      const result = await monitor.testConnectivity('https://example.com')();
+      
+      expect(result._tag).toBe('Right');
+      if (result._tag === 'Right') {
+        expect(result.right).toBe(false);
+      }
+    });
+
+    it('should deduplicate state changes', async () => {
+      const monitor = createNetworkMonitor();
+      
+      const states: NetworkState[] = [];
+      const subscription = monitor.state$.subscribe(state => states.push(state));
+
+      // Wait for initial state
+      await new Promise(resolve => setTimeout(resolve, 10));
+      const initialCount = states.length;
+      
+      // Trigger multiple identical offline events
+      mockNavigator.onLine = false;
+      eventListeners.offline.forEach(handler => {
+        handler({ type: 'offline' } as any);
+        handler({ type: 'offline' } as any); // Duplicate
+      });
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      // Should only add one offline state, not two
+      const offlineCount = states.length - initialCount;
+      expect(offlineCount).toBe(1);
+      
+      subscription.unsubscribe();
+    });
+
+    it('should share state observable among subscribers', () => {
+      const monitor = createNetworkMonitor();
+      
+      let count1 = 0;
+      let count2 = 0;
+      
+      // Subscribe twice
+      monitor.state$.subscribe(() => count1++);
+      monitor.state$.subscribe(() => count2++);
+      
+      // Trigger state change
+      mockNavigator.onLine = false;
+      eventListeners.offline.forEach(handler => handler({ type: 'offline' } as any));
+      
+      // Both should receive the same events
+      expect(count1).toBe(count2);
+      expect(count1).toBeGreaterThan(0);
+    });
+
+    it('should handle offline state correctly', () => {
+      mockNavigator.onLine = false;
+      
+      const monitor = createNetworkMonitor();
+      const state = monitor.getCurrentState();
+      
+      expect(state.online).toBe(false);
     });
   });
 });
